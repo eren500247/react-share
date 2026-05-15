@@ -291,32 +291,28 @@ function App() {
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
   const [showFBInstructions, setShowFBInstructions] = useState(false)
+  const [showDirectAttempt, setShowDirectAttempt] = useState(false)
   
   const fileInputRef = useRef(null)
 
-  // Convert URL to File object
   const urlToFile = async (url, filename) => {
     const response = await fetch(url)
     const blob = await response.blob()
     return new File([blob], filename, { type: blob.type })
   }
 
-  // Handle image upload
   const handleImageUpload = (e) => {
     const file = e.target.files[0]
-    if (!file) return
-    if (!file.type.startsWith('image/')) {
-      alert('Please select a valid image file (JPG, PNG, etc.)')
+    if (!file || !file.type.startsWith('image/')) {
+      alert('Please select a valid image file')
       return
     }
-
     if (previewUrl) URL.revokeObjectURL(previewUrl)
     const newPreviewUrl = URL.createObjectURL(file)
     setSelectedFile(file)
     setPreviewUrl(newPreviewUrl)
   }
 
-  // Cleanup
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -330,51 +326,59 @@ function App() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  // General Share (Best for Instagram Story)
+  // General Share (Instagram Story works best)
   const handleGeneralShare = async () => {
     if (!navigator.share) {
-      alert('Web Share API is not supported.\n\nPlease try on your mobile browser (Chrome/Safari).')
+      alert('Please open this on your mobile browser')
       return
     }
-
     try {
-      let fileToShare = selectedFile
-      if (!fileToShare) {
-        fileToShare = await urlToFile(heroImg, 'hero.png')
-      }
-
+      let fileToShare = selectedFile || await urlToFile(heroImg, 'hero.png')
       await navigator.share({
-        title: selectedFile ? 'My Uploaded Image' : 'Check this out!',
-        text: 'Shared from my React App',
+        title: 'My Story',
+        text: 'Shared from React App',
         files: [fileToShare],
       })
     } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error('Share failed:', err)
-      }
+      if (err.name !== 'AbortError') console.error(err)
     }
   }
 
-  // Facebook Story Specific (Download + Instructions)
-  const handleShareToFacebookStory = async () => {
+  // === NEW: Try Direct Facebook Stories Deep Link ===
+  const handleDirectFacebookStory = async () => {
     let fileToDownload = selectedFile
-
     if (!fileToDownload) {
       fileToDownload = await urlToFile(heroImg, 'story-image.png')
     }
 
-    // Download the image
+    // 1. Download image first (required step)
     const url = URL.createObjectURL(fileToDownload)
     const a = document.createElement('a')
     a.href = url
-    a.download = selectedFile ? selectedFile.name : 'my-story-image.png'
+    a.download = selectedFile ? selectedFile.name : 'my-story.png'
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
 
-    // Show instructions
-    setShowFBInstructions(true)
+    // 2. Try to open Facebook Stories directly
+    setTimeout(() => {
+      try {
+        // Official deep link for Facebook Stories
+        window.location.href = 'facebook-stories://share'
+        
+        // Alternative attempts (in case above doesn't work)
+        setTimeout(() => {
+          if (document.hidden === false) { // If still on same tab
+            window.open('fb://faceweb/f?href=https://www.facebook.com/stories/create', '_blank')
+          }
+        }, 800)
+      } catch (e) {
+        console.log('Deep link failed')
+      }
+    }, 600)
+
+    setShowDirectAttempt(true)
   }
 
   const currentImageSrc = previewUrl || heroImg
@@ -383,13 +387,7 @@ function App() {
     <>
       <section id="center">
         <div className="hero">
-          <img
-            src={currentImageSrc}
-            className="base"
-            width="170"
-            height="179"
-            alt="Preview"
-          />
+          <img src={currentImageSrc} className="base" width="170" height="179" alt="Preview" />
           <img src={reactLogo} className="framework" alt="React logo" />
           <img src={viteLogo} className="vite" alt="Vite logo" />
         </div>
@@ -399,164 +397,83 @@ function App() {
           <p>Edit <code>src/App.jsx</code> and save to test <code>HMR</code></p>
         </div>
 
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
+        <button type="button" className="counter" onClick={() => setCount(c => c + 1)}>
           Count is {count}
         </button>
 
-        {/* Upload Button */}
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          style={{
-            marginTop: '20px',
-            padding: '12px 24px',
-            fontSize: '16px',
-            backgroundColor: '#10b981',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-          }}
+          style={{ marginTop: '20px', padding: '12px 24px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px' }}
         >
           📸 Upload your Image
         </button>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleImageUpload}
-          style={{ display: 'none' }}
-        />
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
 
         {selectedFile && (
           <div style={{ marginTop: '10px', textAlign: 'center' }}>
-            <p style={{ fontSize: '14px', color: '#10b981', margin: '4px 0' }}>
-              ✓ {selectedFile.name}
-            </p>
-            <button
-              onClick={handleRemoveImage}
-              style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
-            >
-              Remove image
-            </button>
+            <p style={{ color: '#10b981' }}>✓ {selectedFile.name}</p>
+            <button onClick={handleRemoveImage} style={{ color: '#ef4444' }}>Remove</button>
           </div>
         )}
 
-        {/* General Share Button */}
-        <button
-          type="button"
-          onClick={handleGeneralShare}
-          style={{
-            marginTop: '25px',
-            padding: '14px 28px',
-            fontSize: '16px',
-            backgroundColor: '#1877F2',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            width: '100%',
-            maxWidth: '300px',
-          }}
-        >
-          📤 Share (Instagram Story + Others)
+        <button onClick={handleGeneralShare} style={{ marginTop: '25px', padding: '14px 28px', background: '#1877F2', color: 'white', border: 'none', borderRadius: '8px', width: '100%', maxWidth: '320px' }}>
+          📤 Share (Best for Instagram Story)
         </button>
 
-        {/* Facebook Story Button */}
-        <button
-          type="button"
-          onClick={handleShareToFacebookStory}
-          style={{
-            marginTop: '12px',
-            padding: '14px 28px',
-            fontSize: '16px',
-            backgroundColor: '#1877F2',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            width: '100%',
-            maxWidth: '300px',
+        <button 
+          onClick={handleDirectFacebookStory} 
+          style={{ 
+            marginTop: '12px', 
+            padding: '14px 28px', 
+            background: '#1877F2', 
+            color: 'white', 
+            border: 'none', 
+            borderRadius: '8px', 
+            width: '100%', 
+            maxWidth: '320px',
+            fontWeight: '600'
           }}
         >
-          📖 Share to Facebook Story
+          📖 Try Direct Facebook Story
         </button>
 
         <p style={{ marginTop: '15px', fontSize: '14px', color: '#666', textAlign: 'center' }}>
-          💡 General share works best for Instagram Story<br />
-          Facebook Story button saves image + shows steps
+          First button = Reliable for Instagram<br />
+          Second button = Attempts direct FB Story (needs FB app installed)
         </p>
       </section>
 
-      {/* Facebook Instructions Modal */}
-      {showFBInstructions && (
+      {/* Direct Attempt Modal */}
+      {showDirectAttempt && (
         <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.9)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10000,
-          padding: '20px'
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.9)', zIndex: 10000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
         }}>
-          <div style={{
-            background: 'white',
-            maxWidth: '400px',
-            width: '100%',
-            borderRadius: '20px',
-            padding: '30px 25px',
-            color: '#333',
-            textAlign: 'center',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
-          }}>
-            <h2 style={{ margin: '0 0 20px' }}>✅ Image Saved to Gallery!</h2>
-            
-            <p style={{ fontSize: '18px', marginBottom: '25px' }}>
-              Now open the <strong>Facebook App</strong> and follow these steps:
+          <div style={{ background: 'white', borderRadius: '20px', padding: '30px', maxWidth: '400px', textAlign: 'center' }}>
+            <h2>Image Downloaded + Opening Facebook...</h2>
+            <p style={{ margin: '20px 0', fontSize: '16px' }}>
+              If Facebook Stories composer didn't open automatically:<br /><br />
+              1. Open Facebook App manually<br />
+              2. Tap <strong>+ Create Story</strong><br />
+              3. Select the downloaded image from Gallery
             </p>
-
-            <ol style={{ 
-              textAlign: 'left', 
-              fontSize: '16px', 
-              lineHeight: '2',
-              paddingLeft: '20px',
-              marginBottom: '30px'
-            }}>
-              <li>Tap <strong>+ Create story</strong> at the top</li>
-              <li>Tap <strong>Gallery</strong> / Camera Roll</li>
-              <li>Select the image you just downloaded</li>
-              <li>Add stickers, text, or music → Share!</li>
-            </ol>
-
-            <button
-              onClick={() => setShowFBInstructions(false)}
-              style={{
-                padding: '14px 50px',
-                backgroundColor: '#1877F2',
-                color: 'white',
-                border: 'none',
-                borderRadius: '9999px',
-                fontSize: '17px',
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}
+            <button 
+              onClick={() => setShowDirectAttempt(false)}
+              style={{ padding: '14px 40px', background: '#1877F2', color: 'white', border: 'none', borderRadius: '50px', fontSize: '16px' }}
             >
-              Got it, Thanks!
+              Close
             </button>
           </div>
         </div>
       )}
 
-      {/* Rest of your original sections */}
+      {/* Your existing sections... */}
       <div className="ticks"></div>
       <section id="next-steps">
-        {/* ... your existing next-steps content ... */}
+        {/* ... keep your original content ... */}
       </section>
     </>
   )
