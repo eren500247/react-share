@@ -492,8 +492,8 @@ function App() {
   const [count, setCount] = useState(0)
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
-  const [showInstructions, setShowInstructions] = useState(false)
   const [isIOS, setIsIOS] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
 
   const fileInputRef = useRef(null)
 
@@ -504,7 +504,7 @@ function App() {
     setIsIOS(iOS)
   }, [])
 
-  const urlToFile = async (url, filename) => {
+  const urlToFile = async (url, filename = 'story-image.png') => {
     const response = await fetch(url)
     const blob = await response.blob()
     return new File([blob], filename, { type: blob.type })
@@ -513,7 +513,7 @@ function App() {
   const handleImageUpload = (e) => {
     const file = e.target.files[0]
     if (!file || !file.type.startsWith('image/')) {
-      alert('Please select a valid image')
+      alert('Please select a valid image file')
       return
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -522,7 +522,9 @@ function App() {
   }
 
   useEffect(() => {
-    return () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
   }, [previewUrl])
 
   const handleRemoveImage = () => {
@@ -532,41 +534,34 @@ function App() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  // Best general share (works great for Instagram Story)
-  const handleGeneralShare = async () => {
+  // === MAIN SHARE BUTTON (Best for iOS) ===
+  const handleShareToStory = async () => {
     if (!navigator.share) {
-      alert('Please use this on your mobile phone')
+      alert("Please open this on your iPhone Safari for best experience.")
       return
     }
+
     try {
-      let fileToShare = selectedFile || await urlToFile(heroImg, 'story-image.png')
+      let fileToShare = selectedFile
+      if (!fileToShare) {
+        fileToShare = await urlToFile(heroImg, 'my-story-image.png')
+      }
+
+      // This opens native iOS share sheet
       await navigator.share({
         title: 'My Story',
-        text: 'Created with my React App',
+        text: 'Check out my story!',
         files: [fileToShare],
       })
+
+      console.log('Share sheet opened successfully')
     } catch (err) {
-      if (err.name !== 'AbortError') console.error(err)
+      if (err.name !== 'AbortError') {
+        console.error(err)
+        // Fallback: show manual instructions
+        setShowHelp(true)
+      }
     }
-  }
-
-  // iOS Friendly - Download + Show Long Press Instructions
-  const handleSaveForFacebookStory = async () => {
-    let fileToDownload = selectedFile
-    if (!fileToDownload) {
-      fileToDownload = await urlToFile(heroImg, 'story-image.png')
-    }
-
-    const url = URL.createObjectURL(fileToDownload)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = selectedFile ? selectedFile.name : 'my-story-image.png'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-
-    setShowInstructions(true)
   }
 
   const currentImageSrc = previewUrl || heroImg
@@ -575,7 +570,13 @@ function App() {
     <>
       <section id="center">
         <div className="hero">
-          <img src={currentImageSrc} className="base" width="170" height="179" alt="Preview" />
+          <img
+            src={currentImageSrc}
+            className="base"
+            width="170"
+            height="179"
+            alt="Preview"
+          />
           <img src={reactLogo} className="framework" alt="React logo" />
           <img src={viteLogo} className="vite" alt="Vite logo" />
         </div>
@@ -589,11 +590,20 @@ function App() {
           Count is {count}
         </button>
 
-        <button onClick={() => fileInputRef.current?.click()} style={{ marginTop: '20px', padding: '12px 24px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px' }}>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          style={{ marginTop: '20px', padding: '12px 24px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px' }}
+        >
           📸 Upload your Image
         </button>
 
-        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleImageUpload}
+          style={{ display: 'none' }}
+        />
 
         {selectedFile && (
           <div style={{ marginTop: '10px', textAlign: 'center' }}>
@@ -602,53 +612,53 @@ function App() {
           </div>
         )}
 
-        <button onClick={handleGeneralShare} style={{ marginTop: '25px', padding: '14px 28px', background: '#1877F2', color: 'white', border: 'none', borderRadius: '8px', width: '100%', maxWidth: '320px' }}>
-          📤 Share (Instagram Story Best)
-        </button>
-
-        <button 
-          onClick={handleSaveForFacebookStory} 
-          style={{ marginTop: '12px', padding: '14px 28px', background: '#1877F2', color: 'white', border: 'none', borderRadius: '8px', width: '100%', maxWidth: '320px' }}
+        {/* MAIN BUTTON - This is the best you can get */}
+        <button
+          onClick={handleShareToStory}
+          style={{
+            marginTop: '30px',
+            padding: '16px 32px',
+            fontSize: '18px',
+            backgroundColor: '#1877F2',
+            color: 'white',
+            border: 'none',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            width: '100%',
+            maxWidth: '340px',
+            fontWeight: '600'
+          }}
         >
-          📖 Save for Facebook Story
+          📤 Share to Facebook / Instagram Story
         </button>
 
-        <p style={{ marginTop: '15px', fontSize: '14px', color: '#666', textAlign: 'center' }}>
-          On iPhone: After saving, long-press the image in Files → "Share" → "Save Image" or use instructions below
+        <p style={{ marginTop: '15px', fontSize: '14px', color: '#555', textAlign: 'center' }}>
+          {isIOS 
+            ? "On iPhone: Tap 'Facebook' or 'Save Image' in the share sheet" 
+            : "Works best on mobile — opens native share sheet"}
         </p>
       </section>
 
-      {/* iOS Instructions Modal */}
-      {showInstructions && (
+      {/* Help Modal */}
+      {showHelp && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 10000,
+          backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 10000,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
         }}>
           <div style={{ background: 'white', borderRadius: '20px', padding: '25px', maxWidth: '420px', textAlign: 'center' }}>
-            <h2>✅ Image Downloaded</h2>
-            
-            <p style={{ fontSize: '17px', margin: '20px 0' }}>
-              Because you are on <strong>iPhone</strong>, the image went to the <strong>Files app</strong>.<br/><br/>
-              <strong>Follow these steps to add it to Photos:</strong>
-            </p>
-
-            <ol style={{ textAlign: 'left', lineHeight: '2', fontSize: '16px', paddingLeft: '15px' }}>
-              <li>Open the <strong>Files</strong> app</li>
-              <li>Go to <strong>Downloads</strong> folder</li>
-              <li>Find your image → <strong>Long press</strong> on it</li>
-              <li>Tap <strong>Share</strong> → Scroll down → Tap <strong>Save Image</strong></li>
+            <h2>How to Add to Facebook Story</h2>
+            <ol style={{ textAlign: 'left', lineHeight: '2.2', fontSize: '16px' }}>
+              <li>Image is ready in share sheet</li>
+              <li>Tap <strong>Facebook</strong> (or Save Image first)</li>
+              <li>Facebook will open in Story mode</li>
+              <li>Edit &amp; post your story</li>
             </ol>
-
-            <p style={{ marginTop: '20px', fontWeight: '600' }}>
-              Now open Facebook → Create Story → It will appear in your Gallery!
-            </p>
-
             <button 
-              onClick={() => setShowInstructions(false)}
-              style={{ marginTop: '25px', padding: '14px 40px', background: '#1877F2', color: 'white', border: 'none', borderRadius: '50px', fontSize: '16px' }}
+              onClick={() => setShowHelp(false)}
+              style={{ marginTop: '20px', padding: '14px 40px', background: '#1877F2', color: 'white', border: 'none', borderRadius: '50px' }}
             >
-              Got it!
+              Got it
             </button>
           </div>
         </div>
@@ -656,7 +666,7 @@ function App() {
 
       <div className="ticks"></div>
       <section id="next-steps">
-        {/* your original content */}
+        {/* your other sections */}
       </section>
     </>
   )
